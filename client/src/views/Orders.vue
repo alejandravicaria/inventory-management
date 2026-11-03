@@ -75,6 +75,56 @@
         </div>
       </div>
     </div>
+
+    <!-- Restock orders load independently of the global filters and the orders loading state -->
+    <div class="card submitted-card">
+      <div class="card-header">
+        <h3 class="card-title">{{ t('orders.submittedOrders') }} ({{ submittedOrders.length }})</h3>
+      </div>
+      <div v-if="submittedLoading" class="loading">{{ t('common.loading') }}</div>
+      <div v-else-if="submittedError" class="error">{{ submittedError }}</div>
+      <div v-else-if="submittedOrders.length === 0" class="loading">{{ t('orders.noSubmittedOrders') }}</div>
+      <div v-else class="table-container">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th class="col-order-number">{{ t('orders.table.orderId') }}</th>
+              <th class="col-date">{{ t('orders.table.submittedDate') }}</th>
+              <th class="col-items">{{ t('orders.table.items') }}</th>
+              <th class="col-value">{{ t('orders.table.totalCost') }}</th>
+              <th class="col-lead">{{ t('orders.table.leadTime') }}</th>
+              <th class="col-date">{{ t('orders.table.expectedDelivery') }}</th>
+              <th class="col-status">{{ t('orders.table.status') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="order in submittedOrders" :key="order.id">
+              <td class="col-order-number"><strong>{{ order.id }}</strong></td>
+              <td class="col-date">{{ formatDate(order.created_date) }}</td>
+              <td class="col-items">
+                <details class="items-details">
+                  <summary class="items-summary">
+                    {{ t('orders.itemsCount', { count: order.items.length }) }}
+                  </summary>
+                  <div class="items-dropdown">
+                    <div v-for="item in order.items" :key="item.item_sku" class="item-entry">
+                      <span class="item-name">{{ item.item_sku }} - {{ item.item_name }}</span>
+                      <span class="item-meta">{{ t('orders.quantity') }}: {{ item.quantity }}</span>
+                    </div>
+                  </div>
+                </details>
+              </td>
+              <td class="col-value"><strong>{{ formatCurrency(order.total_cost, currentCurrency) }}</strong></td>
+              <td class="col-lead">{{ t('orders.daysUnit', { count: order.lead_time_days }) }}</td>
+              <td class="col-date">{{ formatDate(order.expected_delivery_date) }}</td>
+              <td class="col-status">
+                <span class="badge info">{{ order.status }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -83,6 +133,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+import { formatCurrency } from '../utils/currency'
 
 export default {
   name: 'Orders',
@@ -124,6 +175,23 @@ export default {
       }
     }
 
+    const submittedOrders = ref([])
+    const submittedLoading = ref(true)
+    const submittedError = ref(null)
+
+    const loadSubmittedOrders = async () => {
+      try {
+        submittedLoading.value = true
+        submittedError.value = null
+        submittedOrders.value = await api.getRestockOrders()
+      } catch (err) {
+        submittedError.value = t('orders.loadSubmittedError')
+        console.error('Load submitted orders error:', err)
+      } finally {
+        submittedLoading.value = false
+      }
+    }
+
     // Watch for filter changes and reload data
     watch([selectedPeriod, selectedLocation, selectedCategory, selectedStatus], () => {
       loadOrders()
@@ -146,14 +214,20 @@ export default {
     const formatDate = (dateString) => {
       const { currentLocale } = useI18n()
       const locale = currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'
-      return new Date(dateString).toLocaleDateString(locale, {
+      // Guard against missing or malformed dates from the API
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return '-'
+      return date.toLocaleDateString(locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       })
     }
 
-    onMounted(loadOrders)
+    onMounted(() => {
+      loadOrders()
+      loadSubmittedOrders()
+    })
 
     return {
       t,
@@ -164,6 +238,11 @@ export default {
       getOrderStatusClass,
       formatDate,
       currencySymbol,
+      submittedOrders,
+      submittedLoading,
+      submittedError,
+      currentCurrency,
+      formatCurrency,
       translateProductName,
       translateCustomerName
     }
@@ -201,6 +280,14 @@ export default {
 
 .col-value {
   width: 120px;
+}
+
+.col-lead {
+  width: 110px;
+}
+
+.submitted-card {
+  margin-top: 1.5rem;
 }
 
 /* Items details styling */

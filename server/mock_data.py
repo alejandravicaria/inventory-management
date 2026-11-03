@@ -35,5 +35,21 @@ recent_transactions = load_json_file('transactions.json')
 # Load purchase orders
 purchase_orders = load_json_file('purchase_orders.json')
 
+# Restocking: per-SKU unit cost, supplier and lead time for every forecast SKU.
+# The forecast and inventory files only overlap on one SKU, so pricing and lead
+# time live in their own catalog instead of being inferred from either file.
+restock_catalog = load_json_file('restock_catalog.json')
+
+# Submitted restock orders. Starts empty and is never written to disk, so
+# orders reset when the server restarts (same lifecycle as the rest of the mock data).
+restock_orders = []
+
+# User tasks created through the API. Starts empty and resets on restart like the
+# other in-memory data. The client also shows hardcoded demo tasks with ids 1-4
+# (client/src/composables/useAuth.js) and merges both lists matching on id, so
+# API-created ids start at 1000 to avoid ever colliding with them.
+tasks = []
+TASK_ID_START = 1000
+
 # All data is now loaded from JSON files in the data/ directory
 # This allows for easier maintenance and updates of the sample data
